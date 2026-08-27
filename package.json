@@ -1,0 +1,18 @@
+{
+  "name": "link-shortener",
+  "version": "1.0.0",
+  "description": "Acortador de enlaces personal con lista blanca de dominios — backend mínimo para mis proyectos (astroleap.enri.me y compañía)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.12.0"
+  },
+  "license": "MIT"
+}
