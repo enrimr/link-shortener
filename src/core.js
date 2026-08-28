@@ -34,12 +34,7 @@ export function parseAllowedHosts(raw) {
         .filter(Boolean);
 }
 
-export function isAllowedUrl(rawUrl, allowedHosts) {
-    let url;
-    try { url = new URL(rawUrl); } catch (e) { return false; }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
-    if (rawUrl.length > 8192) return false; // los tokens de duelo de ASTRO LEAP rondan 1-2K; 8K es margen de sobra
-    const host = url.hostname.toLowerCase();
+export function hostMatchesAllowed(host, allowedHosts) {
     return allowedHosts.some(allowed => {
         if (allowed.startsWith('*.')) {
             const base = allowed.slice(2);
@@ -47,6 +42,26 @@ export function isAllowedUrl(rawUrl, allowedHosts) {
         }
         return host === allowed;
     });
+}
+
+export function isAllowedUrl(rawUrl, allowedHosts) {
+    let url;
+    try { url = new URL(rawUrl); } catch (e) { return false; }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+    if (rawUrl.length > 8192) return false; // los tokens de duelo de ASTRO LEAP rondan 1-2K; 8K es margen de sobra
+    return hostMatchesAllowed(url.hostname.toLowerCase(), allowedHosts);
+}
+
+// Exención de contraseña por origen: una página servida desde un dominio de la lista blanca
+// puede acortar sin contraseña (el caso del juego). BARRERA BLANDA a sabiendas: Origin la pone
+// el navegador y con curl se falsifica — quien corta el abuso de verdad sigue siendo la lista
+// blanca de destinos y el límite por IP. excludeHost deja fuera al propio panel del acortador
+// (s.enri.me encaja en *.enri.me y sin esto la contraseña del panel no protegería nada).
+export function isTrustedOrigin(origin, allowedHosts, excludeHost) {
+    let host;
+    try { host = new URL(origin).hostname.toLowerCase(); } catch (e) { return false; }
+    if (excludeHost && host === excludeHost) return false;
+    return hostMatchesAllowed(host, allowedHosts);
 }
 
 // Acorta con deduplicación: la misma URL larga con el mismo prefijo siempre devuelve el mismo

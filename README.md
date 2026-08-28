@@ -33,6 +33,8 @@ curl -I https://s.enri.me/Xk3mP2a   # → 301 Location: https://astroleap.enri.m
 | `ADMIN_PASSWORD` | `una-buena-contraseña` | **opcional**; si se define, `POST /api/shorten` exige `Authorization: Bearer <contraseña>` (el panel `/` la pide y la recuerda en el navegador) |
 | `PUBLIC_PREFIXES` | `astroleap` | **opcional**; prefijos que acortan **sin contraseña** — para clientes que llaman desde el navegador (el juego), donde una contraseña embebida sería pública. Riesgo acotado: destino en lista blanca + límite por IP |
 
+Además, las peticiones cuyo `Origin` (lo pone el navegador) es un dominio de `ALLOWED_HOSTS` acortan **sin contraseña**: mis propias webs no necesitan credenciales. El host de `BASE_URL` queda excluido, así el panel sigue pidiéndola. Es una barrera blanda a sabiendas (`Origin` se falsifica con `curl`): el abuso real lo cortan la lista blanca de destinos y el límite por IP, igual que en `PUBLIC_PREFIXES`.
+
 ## Métricas de uso (opcional)
 
 El mismo servicio recoge **contadores agregados** de mis proyectos — privacidad por construcción: la tabla solo guarda `(sitio, evento, día, total)`; ni IP, ni user-agent, ni cookies, ni identificadores. Nada personal → nada de banner.

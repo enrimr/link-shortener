@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateCode, isValidCode, parseAllowedHosts, isAllowedUrl, isValidPrefix, shorten, resolve, makeRateLimiter, passwordMatches, CODE_LENGTH } from '../src/core.js';
+import { generateCode, isValidCode, parseAllowedHosts, isAllowedUrl, isValidPrefix, isTrustedOrigin, shorten, resolve, makeRateLimiter, passwordMatches, CODE_LENGTH } from '../src/core.js';
 
 function memoryDb() {
     const byCode = new Map(), byUrl = new Map();
@@ -107,6 +107,16 @@ test('el prefijo forma parte del enlace: dedup por (url, prefijo) y resolve exig
     assert.equal(await resolve(db, conPrefijo.code, 'otro'), null);   // con otro prefijo tampoco
     assert.equal(await resolve(db, sinPrefijo.code), url);
     assert.deepEqual(await shorten(db, url, HOSTS, 'Astro Leap'), { error: 'bad_prefix' });
+});
+
+test('isTrustedOrigin exime a los dominios de la lista blanca pero nunca al propio panel', () => {
+    assert.ok(isTrustedOrigin('https://astroleap.enri.me', HOSTS, 's.enri.me'));
+    assert.ok(isTrustedOrigin('https://otro.enri.me', HOSTS, 's.enri.me'));      // *.enri.me
+    assert.ok(!isTrustedOrigin('https://s.enri.me', HOSTS, 's.enri.me'));        // el panel, excluido
+    assert.ok(!isTrustedOrigin('https://evil.com', HOSTS, 's.enri.me'));
+    assert.ok(!isTrustedOrigin('https://enri.me.evil.com', HOSTS, 's.enri.me')); // sufijo falso
+    assert.ok(!isTrustedOrigin('', HOSTS, 's.enri.me'));                          // sin Origin (curl)
+    assert.ok(!isTrustedOrigin('null', HOSTS, 's.enri.me'));                      // Origin "null" (sandbox)
 });
 
 test('passwordMatches acepta la contraseña exacta y rechaza variantes y vacíos', () => {

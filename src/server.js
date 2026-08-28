@@ -20,17 +20,22 @@
 //                    El riesgo queda acotado como en el diseño original: destino en lista
 //                    blanca + límite por IP — lo peor posible es crear enlaces hacia MIS
 //                    dominios bajo ese prefijo.
+//                    Además, las peticiones cuyo Origin es un dominio de ALLOWED_HOSTS pasan
+//                    sin contraseña (mis propias webs acortan sin credenciales), con el mismo
+//                    riesgo acotado; el host de BASE_URL queda excluido para que el panel siga
+//                    pidiéndola.
 
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createDb } from './db.js';
-import { shorten, resolve, parseAllowedHosts, makeRateLimiter, passwordMatches, recordMetric, summarizeMetrics, isValidMetricName } from './core.js';
+import { shorten, resolve, parseAllowedHosts, isTrustedOrigin, makeRateLimiter, passwordMatches, recordMetric, summarizeMetrics, isValidMetricName } from './core.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ALLOWED_HOSTS = parseAllowedHosts(process.env.ALLOWED_HOSTS);
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const PUBLIC_PREFIXES = new Set(String(process.env.PUBLIC_PREFIXES || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+const BASE_HOST = new URL(BASE_URL).hostname.toLowerCase(); // el panel NO queda exento por Origin
 
 // El panel es un único HTML estático; se lee una vez y se le inyecta si hace falta contraseña.
 const INDEX_HTML = readFileSync(new URL('./public/index.html', import.meta.url), 'utf8')
@@ -95,9 +100,12 @@ const server = http.createServer(async (req, res) => {
             let payload;
             try { payload = JSON.parse(await readBody(req)); } catch (e) { return json(res, 400, { error: 'bad_json' }); }
             const prefix = typeof payload.prefix === 'string' ? payload.prefix.trim().toLowerCase() : '';
-            // La contraseña protege el acortado libre; los prefijos públicos (el juego) pasan
-            // sin ella — el cuerpo se lee ANTES para conocer el prefijo pedido.
-            if (ADMIN_PASSWORD && !PUBLIC_PREFIXES.has(prefix)) {
+            // La contraseña protege el acortado libre; pasan sin ella los prefijos públicos y
+            // las páginas servidas desde un dominio de la lista blanca (Origin del navegador;
+            // barrera blanda — ver isTrustedOrigin), salvo el propio panel. El cuerpo se lee
+            // ANTES para conocer el prefijo pedido.
+            const trusted = isTrustedOrigin(req.headers.origin || '', ALLOWED_HOSTS, BASE_HOST);
+            if (ADMIN_PASSWORD && !PUBLIC_PREFIXES.has(prefix) && !trusted) {
                 const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
                 if (!passwordMatches(given, ADMIN_PASSWORD)) return json(res, 401, { error: 'unauthorized' });
             }
