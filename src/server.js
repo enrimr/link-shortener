@@ -4,6 +4,7 @@
 //                                        prefix opcional: s.enri.me/astroleap/Xk3mP2a)
 //   GET  /:code                        → 301 a la URL larga (+1 al contador de visitas)
 //   GET  /:prefix/:code                → ídem, para enlaces creados con prefijo
+//   GET  /docs                         → documentación interactiva (Scalar sobre docs/openapi.yaml)
 //   GET  /healthz                      → ok
 //
 // Variables de entorno (en Railway: las dos primeras las inyecta el enlace con Postgres):
@@ -40,6 +41,11 @@ const BASE_HOST = new URL(BASE_URL).hostname.toLowerCase(); // el panel NO queda
 // El panel es un único HTML estático; se lee una vez y se le inyecta si hace falta contraseña.
 const INDEX_HTML = readFileSync(new URL('./public/index.html', import.meta.url), 'utf8')
     .replaceAll('__NEEDS_PASSWORD__', ADMIN_PASSWORD ? 'true' : 'false');
+
+// Documentación interactiva: Scalar renderizando la especificación OpenAPI del repo.
+// El prefijo "docs" está reservado en core.js para que ningún enlace corto lo pise.
+const DOCS_HTML = readFileSync(new URL('./public/docs.html', import.meta.url), 'utf8');
+const OPENAPI_YAML = readFileSync(new URL('../docs/openapi.yaml', import.meta.url), 'utf8');
 
 if (!process.env.DATABASE_URL) {
     console.error('Falta DATABASE_URL (en Railway: enlaza el servicio con un Postgres).');
@@ -92,6 +98,16 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET' && url.pathname === '/') {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             return res.end(INDEX_HTML);
+        }
+
+        if (req.method === 'GET' && (url.pathname === '/docs' || url.pathname === '/docs/')) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            return res.end(DOCS_HTML);
+        }
+
+        if (req.method === 'GET' && url.pathname === '/docs/openapi.yaml') {
+            res.writeHead(200, { 'Content-Type': 'application/yaml; charset=utf-8' });
+            return res.end(OPENAPI_YAML);
         }
 
         if (req.method === 'POST' && url.pathname === '/api/shorten') {

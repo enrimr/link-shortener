@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- Documentación interactiva de la API: Scalar (desde CDN) renderizando docs/openapi.yaml,
+     que el servidor sirve en /docs/openapi.yaml. Sin build ni dependencias propias. -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API · Acortador enri.me</title>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+<script>
+    Scalar.createApiReference('#app', {
+        url: '/docs/openapi.yaml',
+        theme: 'deepSpace',   // a juego con el cielo nocturno del panel
+        darkMode: true,
+        hideDarkModeToggle: false
+    });
+</script>
+</body>
+</html>

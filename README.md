@@ -14,11 +14,12 @@ Acortador de enlaces personal, pensado como backend compartido para mis proyecto
 | `GET /:prefijo/:code` | Ídem para enlaces creados con prefijo — el prefijo debe coincidir |
 | `POST /api/metrics` | Baliza `{site, event}` → incrementa un contador agregado |
 | `GET /api/metrics/:site?days=30` | Lectura de métricas (privada) |
+| `GET /docs` | Documentación interactiva de la API ([Scalar](https://scalar.com) sobre el `openapi.yaml`) |
 | `GET /healthz` | Healthcheck del despliegue |
 
 - La misma URL larga (con el mismo prefijo) devuelve siempre el mismo código (deduplicación).
 - Códigos de 7 caracteres sin `0/O/1/l/I` (se dictan por voz sin ambigüedad); espacio de 57⁷ ≈ 2 billones.
-- El **prefijo** es opcional y nombra el proyecto en el propio enlace: `s.enri.me/astroleap/Xk3mP2a`. Minúsculas, dígitos y guiones (máx. 32); `api` y `healthz` reservados.
+- El **prefijo** es opcional y nombra el proyecto en el propio enlace: `s.enri.me/astroleap/Xk3mP2a`. Minúsculas, dígitos y guiones (máx. 32); `api`, `healthz` y `docs` reservados.
 - CORS abierto **a propósito**: quien corta el abuso es la lista blanca de *destinos*, no de orígenes.
 - Límite de 30 acortados/minuto por IP y 120 balizas/minuto (en memoria — suficiente para uso personal).
 
@@ -33,7 +34,9 @@ Ambas son barreras blandas *a sabiendas* (`Origin` se falsifica con `curl`): el 
 
 ## Probar la API
 
-Todo lo necesario está en [`docs/`](docs/):
+Lo más cómodo: **https://s.enri.me/docs** — documentación interactiva (Scalar) servida por el propio acortador, con todas las rutas, esquemas y ejemplos, y un cliente para lanzar peticiones desde el navegador.
+
+Y en el repo, en [`docs/`](docs/):
 
 - [**`openapi.yaml`**](docs/openapi.yaml) — especificación OpenAPI 3 completa. Impórtala en Postman/Insomnia/Bruno (File → Import) o pégala en [editor.swagger.io](https://editor.swagger.io) para verla renderizada.
 - [**`link-shortener.postman_collection.json`**](docs/link-shortener.postman_collection.json) — colección de Postman con los casos felices y los de error (401/403/400/404), tests automáticos y variables `baseUrl`/`adminPassword`; el código creado se guarda solo y lo reutilizan las peticiones de redirección.

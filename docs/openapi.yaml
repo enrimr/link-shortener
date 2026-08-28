@@ -66,7 +66,7 @@ paths:
                   description: >
                     Prefijo de proyecto opcional; forma parte del enlace corto
                     (`/astroleap/Xk3mP2a`). Minúsculas, dígitos y guiones;
-                    `api` y `healthz` están reservados.
+                    `api`, `healthz` y `docs` están reservados.
                   example: astroleap
       responses:
         "200":
@@ -258,6 +258,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /docs:
+    get:
+      tags: [sistema]
+      summary: Esta documentación, interactiva
+      description: Scalar renderizando esta misma especificación (servida en `/docs/openapi.yaml`).
+      responses:
+        "200":
+          description: HTML de la documentación
+          content:
+            text/html: {}
 
   /healthz:
     get:
