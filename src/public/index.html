@@ -1,0 +1,233 @@
+<!doctype html>
+<!-- Panel del acortador. Un solo fichero sin dependencias: el servidor lo sirve en "/" y
+     sustituye __NEEDS_PASSWORD__ según tenga o no ADMIN_PASSWORD definida. -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acortador · enri.me</title>
+<style>
+    :root {
+        --noche: #0d1226;
+        --panel: #151b38;
+        --borde: #2a3363;
+        --tinta: #e9ecfb;
+        --apagado: #8e96bd;
+        --estrella: #ffc857;
+        --error: #ff7a6e;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        color: var(--tinta);
+        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background:
+            radial-gradient(1.5px 1.5px at 12% 22%, #ffffffb0 50%, transparent 51%),
+            radial-gradient(1px 1px at 78% 14%, #ffffff70 50%, transparent 51%),
+            radial-gradient(1px 1px at 32% 78%, #ffffff60 50%, transparent 51%),
+            radial-gradient(1.5px 1.5px at 88% 64%, #ffffff80 50%, transparent 51%),
+            radial-gradient(1px 1px at 56% 40%, #ffffff50 50%, transparent 51%),
+            radial-gradient(2px 2px at 68% 88%, #ffc85766 50%, transparent 51%),
+            radial-gradient(ellipse at 50% 120%, #1b2350 0%, var(--noche) 60%);
+        background-color: var(--noche);
+    }
+    main {
+        width: min(440px, 100%);
+        background: var(--panel);
+        border: 1px solid var(--borde);
+        border-radius: 14px;
+        padding: 28px;
+        box-shadow: 0 20px 60px #00000066;
+    }
+    h1 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+    }
+    h1 .dominio { color: var(--estrella); }
+    p.lema {
+        margin: 4px 0 22px;
+        color: var(--apagado);
+        font-size: 0.85rem;
+    }
+    label {
+        display: block;
+        margin: 14px 0 6px;
+        font-size: 0.8rem;
+        color: var(--apagado);
+    }
+    label .opcional { opacity: 0.65; font-weight: 400; }
+    input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--borde);
+        border-radius: 8px;
+        background: var(--noche);
+        color: var(--tinta);
+        font-size: 0.95rem;
+    }
+    input:focus-visible, button:focus-visible {
+        outline: 2px solid var(--estrella);
+        outline-offset: 2px;
+    }
+    button {
+        margin-top: 18px;
+        width: 100%;
+        padding: 11px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--estrella);
+        color: #221a05;
+        font-size: 0.95rem;
+        font-weight: 650;
+        cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    /* El código se diseñó para dictarse por voz (sin 0/O/1/l/I): aquí se muestra a lo grande,
+       espaciado para leerse letra a letra. Es el protagonista del panel. */
+    #resultado {
+        display: none;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--borde);
+        text-align: center;
+    }
+    #codigo {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 2.1rem;
+        letter-spacing: 0.22em;
+        color: var(--estrella);
+        margin: 4px 0 10px;
+        word-break: break-all;
+    }
+    #enlace {
+        color: var(--apagado);
+        font-size: 0.85rem;
+        word-break: break-all;
+    }
+    #copiar {
+        margin-top: 12px;
+        background: transparent;
+        border: 1px solid var(--borde);
+        color: var(--tinta);
+        font-weight: 500;
+    }
+    #aviso {
+        display: none;
+        margin: 14px 0 0;
+        color: var(--error);
+        font-size: 0.85rem;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        #resultado.visible { animation: aparecer 0.25s ease-out; }
+        @keyframes aparecer {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: none; }
+        }
+    }
+</style>
+</head>
+<body>
+<main>
+    <h1>Acortador <span class="dominio" id="base-host"></span></h1>
+    <p class="lema">Enlaces cortos para mis dominios. El código se dicta letra a letra.</p>
+
+    <form id="formulario">
+        <label for="url">URL larga</label>
+        <input id="url" name="url" type="url" required placeholder="https://astroleap.enri.me/…" autofocus>
+
+        <label for="prefix">Proyecto <span class="opcional">(opcional — aparece en el enlace: /astroleap/…)</span></label>
+        <input id="prefix" name="prefix" type="text" pattern="[a-z0-9\-]{1,32}" maxlength="32"
+               placeholder="astroleap" autocapitalize="off" autocomplete="off" spellcheck="false"
+               title="minúsculas, dígitos y guiones (máx. 32)">
+
+        <label for="password" id="label-password">Contraseña</label>
+        <input id="password" name="password" type="password" autocomplete="current-password">
+
+        <button type="submit" id="acortar">Acortar</button>
+    </form>
+
+    <p id="aviso" role="alert"></p>
+
+    <section id="resultado" aria-live="polite">
+        <div id="codigo"></div>
+        <a id="enlace" target="_blank" rel="noopener"></a>
+        <button type="button" id="copiar">Copiar enlace</button>
+    </section>
+</main>
+
+<script>
+    const NEEDS_PASSWORD = __NEEDS_PASSWORD__;
+
+    const $ = id => document.getElementById(id);
+    $('base-host').textContent = location.host;
+
+    // La contraseña se recuerda en este navegador para no teclearla en cada enlace.
+    if (!NEEDS_PASSWORD) {
+        $('label-password').style.display = 'none';
+        $('password').style.display = 'none';
+    } else {
+        $('password').value = localStorage.getItem('acortador_password') || '';
+    }
+
+    const MENSAJES = {
+        url_not_allowed: 'Ese dominio no está en la lista blanca del servidor.',
+        bad_prefix: 'El proyecto solo admite minúsculas, dígitos y guiones (y no puede ser "api" ni "healthz").',
+        unauthorized: 'Contraseña incorrecta.',
+        rate_limited: 'Demasiadas peticiones seguidas. Espera un minuto y reintenta.',
+        bad_json: 'La petición llegó mal formada. Recarga la página y reintenta.'
+    };
+
+    $('formulario').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const boton = $('acortar');
+        boton.disabled = true;
+        $('aviso').style.display = 'none';
+        $('resultado').style.display = 'none';
+        $('resultado').classList.remove('visible');
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (NEEDS_PASSWORD) {
+                headers['Authorization'] = 'Bearer ' + $('password').value;
+                localStorage.setItem('acortador_password', $('password').value);
+            }
+            const respuesta = await fetch('/api/shorten', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ url: $('url').value.trim(), prefix: $('prefix').value.trim().toLowerCase() })
+            });
+            const datos = await respuesta.json();
+            if (!respuesta.ok) {
+                mostrarAviso(MENSAJES[datos.error] || 'El servidor respondió con un error (' + respuesta.status + ').');
+                return;
+            }
+            $('codigo').textContent = datos.code;
+            $('enlace').textContent = datos.shortUrl;
+            $('enlace').href = datos.shortUrl;
+            $('resultado').style.display = 'block';
+            $('resultado').classList.add('visible');
+        } catch (e) {
+            mostrarAviso('No se pudo contactar con el servidor.');
+        } finally {
+            boton.disabled = false;
+        }
+    });
+
+    function mostrarAviso(texto) {
+        $('aviso').textContent = texto;
+        $('aviso').style.display = 'block';
+    }
+
+    $('copiar').addEventListener('click', async () => {
+        await navigator.clipboard.writeText($('enlace').textContent);
+        $('copiar').textContent = 'Copiado';
+        setTimeout(() => { $('copiar').textContent = 'Copiar enlace'; }, 1500);
+    });
+</script>
+</body>
+</html>

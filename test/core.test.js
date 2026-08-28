@@ -3,17 +3,18 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateCode, isValidCode, parseAllowedHosts, isAllowedUrl, shorten, resolve, makeRateLimiter, CODE_LENGTH } from '../src/core.js';
+import { generateCode, isValidCode, parseAllowedHosts, isAllowedUrl, isValidPrefix, shorten, resolve, makeRateLimiter, passwordMatches, CODE_LENGTH } from '../src/core.js';
 
 function memoryDb() {
     const byCode = new Map(), byUrl = new Map();
+    const urlKey = (url, prefix) => `${prefix}\n${url}`;
     return {
-        async findByUrl(url) { return byUrl.has(url) ? { code: byUrl.get(url) } : null; },
-        async findByCode(code) { return byCode.has(code) ? { url: byCode.get(code) } : null; },
-        async insert(code, url) {
-            if (byUrl.has(url)) return 'url_exists';
+        async findByUrl(url, prefix) { const k = urlKey(url, prefix); return byUrl.has(k) ? { code: byUrl.get(k) } : null; },
+        async findByCode(code) { return byCode.get(code) || null; },
+        async insert(code, url, prefix) {
+            if (byUrl.has(urlKey(url, prefix))) return 'url_exists';
             if (byCode.has(code)) return 'code_collision';
-            byCode.set(code, url); byUrl.set(url, code);
+            byCode.set(code, { url, prefix }); byUrl.set(urlKey(url, prefix), code);
             return 'ok';
         },
         async recordHit() {},
@@ -80,6 +81,40 @@ test('resolve devuelve la URL para un código válido y null para basura', async
     assert.equal(await resolve(db, 'NOEXISTE'), null);
     assert.equal(await resolve(db, '../etc/passwd'), null);
     assert.equal(await resolve(db, ''), null);
+});
+
+test('los prefijos válidos pasan y los reservados o con mayúsculas no', () => {
+    assert.ok(isValidPrefix('astroleap'));
+    assert.ok(isValidPrefix('mi-proyecto-2'));
+    assert.ok(!isValidPrefix('api'));        // reservado: ruta del servidor
+    assert.ok(!isValidPrefix('healthz'));    // reservado: ruta del servidor
+    assert.ok(!isValidPrefix('AstroLeap')); // solo minúsculas
+    assert.ok(!isValidPrefix('con/barra'));
+    assert.ok(!isValidPrefix('a'.repeat(33)));
+    assert.ok(!isValidPrefix(''));
+});
+
+test('el prefijo forma parte del enlace: dedup por (url, prefijo) y resolve exige coincidencia', async () => {
+    const db = memoryDb();
+    const url = 'https://astroleap.enri.me/?duelo=abc';
+    const conPrefijo = await shorten(db, url, HOSTS, 'astroleap');
+    const repetido = await shorten(db, url, HOSTS, 'astroleap');
+    const sinPrefijo = await shorten(db, url, HOSTS);
+    assert.equal(conPrefijo.code, repetido.code);              // misma URL + mismo prefijo → mismo código
+    assert.notEqual(conPrefijo.code, sinPrefijo.code);         // sin prefijo es otro enlace
+    assert.equal(await resolve(db, conPrefijo.code, 'astroleap'), url);
+    assert.equal(await resolve(db, conPrefijo.code), null);           // sin prefijo no resuelve
+    assert.equal(await resolve(db, conPrefijo.code, 'otro'), null);   // con otro prefijo tampoco
+    assert.equal(await resolve(db, sinPrefijo.code), url);
+    assert.deepEqual(await shorten(db, url, HOSTS, 'Astro Leap'), { error: 'bad_prefix' });
+});
+
+test('passwordMatches acepta la contraseña exacta y rechaza variantes y vacíos', () => {
+    assert.ok(passwordMatches('secreta123', 'secreta123'));
+    assert.ok(!passwordMatches('secreta12', 'secreta123'));
+    assert.ok(!passwordMatches('SECRETA123', 'secreta123'));
+    assert.ok(!passwordMatches('', 'secreta123'));
+    assert.ok(!passwordMatches(undefined, 'secreta123'));
 });
 
 test('el limitador de peticiones corta al pasar el máximo y se renueva con la ventana', () => {
