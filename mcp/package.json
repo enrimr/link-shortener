@@ -1,0 +1,17 @@
+{
+  "name": "link-shortener-mcp",
+  "version": "1.0.0",
+  "description": "Servidor MCP del acortador: expone acortar_url, leer_metricas, registrar_evento y estado_acortador como herramientas para agentes (Claude Code, etc.)",
+  "type": "module",
+  "bin": {
+    "link-shortener-mcp": "server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  },
+  "license": "MIT"
+}

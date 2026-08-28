@@ -55,6 +55,25 @@ curl -X POST https://s.enri.me/api/shorten \
 curl -I https://s.enri.me/astroleap/Xk3mP2a   # → 301 Location: https://astroleap.enri.me/?duelo=...
 ```
 
+## Herramientas MCP para agentes
+
+En [`mcp/`](mcp/) hay un servidor MCP (stdio) que expone el acortador como herramientas para agentes — Claude Code, o cualquier cliente MCP:
+
+| Herramienta | Qué hace |
+|---|---|
+| `acortar_url` | Acorta `{url, prefix?}` → `{code, prefix, shortUrl}` |
+| `leer_metricas` | Lee los contadores de un sitio (`{site, days?}`) |
+| `registrar_evento` | Suma una baliza `{site, event}` |
+| `estado_acortador` | Healthcheck + base URL configurada |
+
+Es un cliente fino de la API HTTP: toda la lógica y la seguridad siguen en el servidor. Configuración por entorno: `SHORTENER_BASE_URL` (por defecto `https://s.enri.me`) y `SHORTENER_ADMIN_PASSWORD`.
+
+En este repo ya está registrado vía [`.mcp.json`](.mcp.json) — Claude Code lo detecta al abrir el proyecto; solo hace falta exportar la contraseña en el shell (`export SHORTENER_ADMIN_PASSWORD=…`) y `cd mcp && npm install` la primera vez. Para usarlo desde cualquier otro sitio:
+
+```bash
+claude mcp add acortador -e SHORTENER_ADMIN_PASSWORD=… -- node /ruta/a/link-shortener/mcp/server.js
+```
+
 ## Métricas de uso (opcional)
 
 El mismo servicio recoge **contadores agregados** de mis proyectos — privacidad por construcción: la tabla solo guarda `(sitio, evento, día, total)`; ni IP, ni user-agent, ni cookies, ni identificadores. Nada personal → nada de banner.

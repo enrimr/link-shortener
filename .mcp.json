@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "acortador": {
+      "command": "node",
+      "args": ["mcp/server.js"],
+      "env": {
+        "SHORTENER_BASE_URL": "https://s.enri.me",
+        "SHORTENER_ADMIN_PASSWORD": "${SHORTENER_ADMIN_PASSWORD}"
+      }
+    }
+  }
+}
