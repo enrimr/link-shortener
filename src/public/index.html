@@ -117,12 +117,53 @@
         color: var(--tinta);
         font-weight: 500;
     }
-    #aviso {
+    #aviso, #aviso-metricas {
         display: none;
         margin: 14px 0 0;
         color: var(--error);
         font-size: 0.85rem;
     }
+    /* Pestañas Acortar/Métricas: mismo panel, dos herramientas. */
+    nav.pestanas { display: flex; gap: 8px; margin-top: 18px; }
+    nav.pestanas button {
+        margin: 0;
+        flex: 1;
+        padding: 8px;
+        background: transparent;
+        border: 1px solid var(--borde);
+        color: var(--apagado);
+        font-weight: 500;
+    }
+    nav.pestanas button[aria-selected="true"] {
+        background: var(--noche);
+        color: var(--estrella);
+        border-color: var(--estrella);
+    }
+    #totales { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    #totales span {
+        border: 1px solid var(--borde);
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 0.8rem;
+        color: var(--apagado);
+    }
+    #totales b { color: var(--estrella); font-weight: 650; }
+    /* La tabla pivota día × evento; con muchos eventos desborda el panel → scroll horizontal. */
+    .tabla-envoltura { overflow-x: auto; margin-top: 14px; }
+    #tabla { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+    #tabla th, #tabla td {
+        padding: 6px 8px;
+        text-align: right;
+        border-bottom: 1px solid var(--borde);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    #tabla th { color: var(--apagado); font-weight: 500; }
+    #tabla th:first-child, #tabla td:first-child {
+        text-align: left;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    #sin-datos { display: none; margin-top: 16px; color: var(--apagado); font-size: 0.85rem; }
     @media (prefers-reduced-motion: no-preference) {
         #resultado.visible { animation: aparecer 0.25s ease-out; }
         @keyframes aparecer {
@@ -137,6 +178,12 @@
     <h1>Acortador <span class="dominio" id="base-host"></span></h1>
     <p class="lema">Enlaces cortos para mis dominios. El código se dicta letra a letra.</p>
 
+    <nav class="pestanas" role="tablist">
+        <button type="button" id="tab-acortar" role="tab" aria-selected="true">Acortar</button>
+        <button type="button" id="tab-metricas" role="tab" aria-selected="false">Métricas</button>
+    </nav>
+
+    <div id="vista-acortar" role="tabpanel">
     <form id="formulario">
         <label for="url">URL larga</label>
         <input id="url" name="url" type="url" required placeholder="https://astroleap.enri.me/…" autofocus>
@@ -159,6 +206,30 @@
         <a id="enlace" target="_blank" rel="noopener"></a>
         <button type="button" id="copiar">Copiar enlace</button>
     </section>
+    </div>
+
+    <div id="vista-metricas" role="tabpanel" hidden>
+        <form id="form-metricas">
+            <label for="sitio">Proyecto</label>
+            <input id="sitio" name="sitio" type="text" required pattern="[a-z0-9_\-]{1,32}" maxlength="32"
+                   value="astroleap" autocapitalize="off" autocomplete="off" spellcheck="false"
+                   title="minúsculas, dígitos, guiones y guion bajo (máx. 32)">
+
+            <label for="dias">Días hacia atrás</label>
+            <input id="dias" name="dias" type="number" min="1" max="365" value="30" required>
+
+            <label for="password-metricas" id="label-password-metricas">Contraseña</label>
+            <input id="password-metricas" name="password-metricas" type="password" autocomplete="current-password">
+
+            <button type="submit" id="consultar">Consultar</button>
+        </form>
+
+        <p id="aviso-metricas" role="alert"></p>
+        <p id="sin-datos">Sin balizas en ese periodo. Los contadores aparecen cuando el juego las manda.</p>
+
+        <div id="totales" aria-live="polite"></div>
+        <div class="tabla-envoltura"><table id="tabla"></table></div>
+    </div>
 </main>
 
 <script>
@@ -168,12 +239,26 @@
     $('base-host').textContent = location.host;
 
     // La contraseña se recuerda en este navegador para no teclearla en cada enlace.
+    // Las dos pestañas comparten la misma (es la ADMIN_PASSWORD del servidor).
     if (!NEEDS_PASSWORD) {
-        $('label-password').style.display = 'none';
-        $('password').style.display = 'none';
+        for (const id of ['label-password', 'password', 'label-password-metricas', 'password-metricas']) {
+            $(id).style.display = 'none';
+        }
     } else {
         $('password').value = localStorage.getItem('acortador_password') || '';
+        $('password-metricas').value = $('password').value;
     }
+
+    // Pestañas: un solo panel, dos herramientas (crear enlaces / leer métricas).
+    function mostrarPestana(activa) {
+        const acortar = activa === 'acortar';
+        $('vista-acortar').hidden = !acortar;
+        $('vista-metricas').hidden = acortar;
+        $('tab-acortar').setAttribute('aria-selected', String(acortar));
+        $('tab-metricas').setAttribute('aria-selected', String(!acortar));
+    }
+    $('tab-acortar').addEventListener('click', () => mostrarPestana('acortar'));
+    $('tab-metricas').addEventListener('click', () => mostrarPestana('metricas'));
 
     const MENSAJES = {
         url_not_allowed: 'Ese dominio no está en la lista blanca del servidor.',
@@ -228,6 +313,86 @@
         $('copiar').textContent = 'Copiado';
         setTimeout(() => { $('copiar').textContent = 'Copiar enlace'; }, 1500);
     });
+
+    // ---- Métricas: GET /api/metrics/:site?days=N (Bearer) pintado como totales + tabla
+    // día × evento. Todo con textContent/createElement: nada del servidor entra como HTML.
+    $('form-metricas').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const boton = $('consultar');
+        boton.disabled = true;
+        $('aviso-metricas').style.display = 'none';
+        $('sin-datos').style.display = 'none';
+        $('totales').replaceChildren();
+        $('tabla').replaceChildren();
+        try {
+            const headers = {};
+            if (NEEDS_PASSWORD) {
+                headers['Authorization'] = 'Bearer ' + $('password-metricas').value;
+                localStorage.setItem('acortador_password', $('password-metricas').value);
+                $('password').value = $('password-metricas').value;
+            }
+            const sitio = $('sitio').value.trim().toLowerCase();
+            const dias = Math.max(1, Math.min(365, parseInt($('dias').value, 10) || 30));
+            const respuesta = await fetch(`/api/metrics/${encodeURIComponent(sitio)}?days=${dias}`, { headers });
+            const datos = await respuesta.json();
+            if (!respuesta.ok) {
+                mostrarAvisoMetricas(MENSAJES[datos.error] || 'El servidor respondió con un error (' + respuesta.status + ').');
+                return;
+            }
+            pintarMetricas(datos);
+        } catch (e) {
+            mostrarAvisoMetricas('No se pudo contactar con el servidor.');
+        } finally {
+            boton.disabled = false;
+        }
+    });
+
+    function mostrarAvisoMetricas(texto) {
+        $('aviso-metricas').textContent = texto;
+        $('aviso-metricas').style.display = 'block';
+    }
+
+    function pintarMetricas(datos) {
+        // Eventos ordenados por total (lo que más pasa, primero); pg manda BIGINT como string.
+        const eventos = Object.keys(datos.totals).sort((a, b) => Number(datos.totals[b]) - Number(datos.totals[a]));
+        if (!eventos.length) { $('sin-datos').style.display = 'block'; return; }
+
+        for (const evento of eventos) {
+            const chip = document.createElement('span');
+            const total = document.createElement('b');
+            total.textContent = Number(datos.totals[evento]).toLocaleString('es');
+            chip.append(evento + ' ', total);
+            $('totales').appendChild(chip);
+        }
+
+        const porDia = new Map(); // "día|evento" → cuenta; los días llegan ya en orden DESC
+        const dias = [];
+        for (const fila of datos.events) {
+            if (!porDia.has(fila.day)) { porDia.set(fila.day, true); dias.push(fila.day); }
+            porDia.set(fila.day + '|' + fila.event, Number(fila.count));
+        }
+
+        const cabecera = document.createElement('tr');
+        for (const texto of ['Día', ...eventos]) {
+            const th = document.createElement('th');
+            th.textContent = texto;
+            cabecera.appendChild(th);
+        }
+        $('tabla').appendChild(cabecera);
+        for (const dia of dias) {
+            const tr = document.createElement('tr');
+            const tdDia = document.createElement('td');
+            tdDia.textContent = dia;
+            tr.appendChild(tdDia);
+            for (const evento of eventos) {
+                const td = document.createElement('td');
+                const n = porDia.get(dia + '|' + evento);
+                td.textContent = n === undefined ? '' : n.toLocaleString('es');
+                tr.appendChild(td);
+            }
+            $('tabla').appendChild(tr);
+        }
+    }
 </script>
 </body>
 </html>

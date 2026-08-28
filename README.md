@@ -48,6 +48,8 @@ curl -H 'Authorization: Bearer <contraseña>' 'https://s.enri.me/api/metrics/ast
 # → {"site":"astroleap","days":30,"events":[{"event":"visita","day":"2026-08-27","count":42},...],"totals":{"visita":410,"victoria":7}}
 ```
 
+También sin terminal: el panel `/` tiene una pestaña **Métricas** (misma contraseña, que ya recuerda el navegador) con los totales del periodo y una tabla día × evento.
+
 Eventos que manda ASTRO LEAP: `visita`, `partida`, `reto`, `duelo`, `reto_ok`, `victoria`, `gameover`.
 
 ## Desplegar en Railway
