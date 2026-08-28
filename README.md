@@ -72,6 +72,8 @@ También sin terminal: el panel `/` tiene una pestaña **Métricas** (misma cont
 
 Eventos que manda ASTRO LEAP: `visita`, `partida`, `reto`, `duelo`, `reto_ok`, `victoria`, `gameover`.
 
+Y uno que genera el propio acortador: **`enlace_abierto`** — cada redirección suma en las métricas del sitio del prefijo (los enlaces `/astroleap/…` cuentan en `astroleap`; los enlaces sin prefijo, en el sitio `acortador`). KPI de enlaces abiertos por proyecto y día, sin tocar a los clientes. Ojo a la letra pequeña: el 301 lleva `Cache-Control` de un día, así que las aperturas repetidas desde el mismo navegador no vuelven a pasar por el servidor (le pasa igual al `hits` por enlace) — es un KPI de alcance, no de clics exactos.
+
 ## Variables de entorno
 
 | Variable | Ejemplo | Notas |

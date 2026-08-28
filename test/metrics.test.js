@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidMetricName, recordMetric, summarizeMetrics } from '../src/core.js';
+import { isValidMetricName, recordMetric, recordOpen, summarizeMetrics } from '../src/core.js';
 
 function memoryMetrics() {
     const counts = new Map(); // "site|event" → n (un solo día simulado)
@@ -41,6 +41,17 @@ test('recordMetric valida y acumula; los nombres inválidos ni tocan la base', a
     const rows = await db.readMetrics('astroleap');
     const visita = rows.find(r => r.event === 'visita');
     assert.equal(visita.count, 2); // el contador agrega, no acumula filas
+});
+
+test('recordOpen suma enlace_abierto en el sitio del prefijo, o en "acortador" sin él', async () => {
+    const db = memoryMetrics();
+    await recordOpen(db, 'astroleap');
+    await recordOpen(db, 'astroleap');
+    await recordOpen(db, '');
+    const astroleap = await db.readMetrics('astroleap');
+    assert.deepEqual(astroleap.find(r => r.event === 'enlace_abierto').count, 2);
+    const sinPrefijo = await db.readMetrics('acortador');
+    assert.deepEqual(sinPrefijo.find(r => r.event === 'enlace_abierto').count, 1);
 });
 
 test('summarizeMetrics devuelve filas y totales por evento', () => {

@@ -29,7 +29,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createDb } from './db.js';
-import { shorten, resolve, parseAllowedHosts, isTrustedOrigin, makeRateLimiter, passwordMatches, recordMetric, summarizeMetrics, isValidMetricName } from './core.js';
+import { shorten, resolve, parseAllowedHosts, isTrustedOrigin, makeRateLimiter, passwordMatches, recordMetric, recordOpen, summarizeMetrics, isValidMetricName } from './core.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const ALLOWED_HOSTS = parseAllowedHosts(process.env.ALLOWED_HOSTS);
@@ -162,6 +162,9 @@ const server = http.createServer(async (req, res) => {
         if (redirect) {
             const target = await resolve(db, redirect[2], redirect[1] || '');
             if (!target) return json(res, 404, { error: 'not_found' });
+            // KPI "enlaces abiertos", en segundo plano: la baliza es cortesía y no debe
+            // retrasar ni tumbar la redirección (mismo criterio que recordHit).
+            recordOpen(db, redirect[1] || '').catch(() => {});
             res.writeHead(301, { Location: target, 'Cache-Control': 'public, max-age=86400' });
             return res.end();
         }

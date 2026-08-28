@@ -110,6 +110,14 @@ export async function recordMetric(db, site, event) {
     return { ok: true };
 }
 
+// KPI "enlaces abiertos": cada redirección suma la baliza enlace_abierto en las métricas del
+// proyecto — el prefijo hace de sitio (los enlaces de astroleap suman junto a sus visitas y
+// victorias); sin prefijo, bajo el sitio "acortador". Complementa al hits por enlace: aquel
+// dice qué enlace, este cuántos por proyecto y día.
+export function recordOpen(db, prefix) {
+    return recordMetric(db, prefix || 'acortador', 'enlace_abierto');
+}
+
 // Resumen para la lectura: filas por día + totales por evento del periodo.
 export function summarizeMetrics(rows) {
     const totals = {};

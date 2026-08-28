@@ -123,7 +123,10 @@ paths:
             $ref: "#/components/schemas/Codigo"
       responses:
         "301":
-          description: Redirección a la URL larga (+1 al contador de visitas)
+          description: >
+            Redirección a la URL larga. Además suma +1 al contador `hits` del enlace y
+            registra la baliza `enlace_abierto` en las métricas del sitio `acortador`
+            (los enlaces sin prefijo cuentan ahí).
           headers:
             Location:
               schema: { type: string, format: uri }
@@ -156,7 +159,10 @@ paths:
             $ref: "#/components/schemas/Codigo"
       responses:
         "301":
-          description: Redirección a la URL larga (+1 al contador de visitas)
+          description: >
+            Redirección a la URL larga. Además suma +1 al contador `hits` del enlace y
+            registra la baliza `enlace_abierto` en las métricas del sitio del prefijo
+            (p.ej. los enlaces `/astroleap/…` suman en las métricas de `astroleap`).
           headers:
             Location:
               schema: { type: string, format: uri }
