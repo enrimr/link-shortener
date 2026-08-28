@@ -1,0 +1,70 @@
+# Peticiones de prueba para VS Code (extensión "REST Client") o el HTTP Client de IntelliJ.
+# Cambia las variables y pulsa "Send Request" sobre cada bloque.
+
+@baseUrl = https://s.enri.me
+# @baseUrl = http://localhost:3000
+@adminPassword = PON_AQUI_LA_CONTRASEÑA
+
+### Healthcheck
+GET {{baseUrl}}/healthz
+
+### Acortar una URL (con contraseña)
+POST {{baseUrl}}/api/shorten
+Content-Type: application/json
+Authorization: Bearer {{adminPassword}}
+
+{
+  "url": "https://astroleap.enri.me/?duelo=TOKEN_DE_PRUEBA"
+}
+
+### Acortar con prefijo de proyecto → /astroleap/<código>
+POST {{baseUrl}}/api/shorten
+Content-Type: application/json
+Authorization: Bearer {{adminPassword}}
+
+{
+  "url": "https://astroleap.enri.me/?duelo=TOKEN_CON_PREFIJO",
+  "prefix": "astroleap"
+}
+
+### Acortar sin contraseña, con Origin de confianza (así llama el juego desde el navegador)
+POST {{baseUrl}}/api/shorten
+Content-Type: application/json
+Origin: https://astroleap.enri.me
+
+{
+  "url": "https://astroleap.enri.me/?duelo=DESDE_EL_JUEGO"
+}
+
+### Sin credenciales → 401
+POST {{baseUrl}}/api/shorten
+Content-Type: application/json
+
+{
+  "url": "https://astroleap.enri.me/x"
+}
+
+### Dominio fuera de la lista blanca → 403
+POST {{baseUrl}}/api/shorten
+Content-Type: application/json
+Authorization: Bearer {{adminPassword}}
+
+{
+  "url": "https://ejemplo-no-permitido.com/"
+}
+
+### Redirección (pega aquí un código real; REST Client no sigue el 301 por defecto)
+GET {{baseUrl}}/astroleap/Xk3mP2a
+
+### Baliza de métricas (abierta)
+POST {{baseUrl}}/api/metrics
+Content-Type: application/json
+
+{
+  "site": "astroleap",
+  "event": "visita"
+}
+
+### Leer métricas (privada)
+GET {{baseUrl}}/api/metrics/astroleap?days=30
+Authorization: Bearer {{adminPassword}}

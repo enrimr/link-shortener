@@ -1,0 +1,297 @@
+{
+  "info": {
+    "name": "Acortador de enlaces (s.enri.me)",
+    "description": "Colección para probar el acortador. Configura las variables `baseUrl` y `adminPassword` (pestaña Variables de la colección). Al ejecutar «Acortar una URL» se guardan `shortCode`/`shortPrefix` automáticamente y las peticiones de redirección los reutilizan.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://s.enri.me" },
+    { "key": "adminPassword", "value": "" },
+    { "key": "shortCode", "value": "" },
+    { "key": "shortPrefix", "value": "astroleap" }
+  ],
+  "item": [
+    {
+      "name": "Salud",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/healthz"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('responde ok', () => pm.expect(pm.response.json().ok).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Acortar",
+      "item": [
+        {
+          "name": "Acortar una URL (con contraseña)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/shorten",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminPassword}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://astroleap.enri.me/?duelo=TOKEN_DE_PRUEBA\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('devuelve code y shortUrl', () => {",
+                  "    const r = pm.response.json();",
+                  "    pm.expect(r.code).to.match(/^[A-HJ-NP-Za-km-z2-9]{7}$/);",
+                  "    pm.expect(r.shortUrl).to.include(r.code);",
+                  "    pm.collectionVariables.set('shortCode', r.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Acortar con prefijo de proyecto",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/shorten",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminPassword}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://astroleap.enri.me/?duelo=TOKEN_CON_PREFIJO\",\n  \"prefix\": \"{{shortPrefix}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('el shortUrl lleva el prefijo', () => {",
+                  "    const r = pm.response.json();",
+                  "    pm.expect(r.shortUrl).to.include('/' + r.prefix + '/' + r.code);",
+                  "    pm.collectionVariables.set('shortCode', r.code);",
+                  "    pm.collectionVariables.set('shortPrefix', r.prefix);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Acortar sin contraseña pero con Origin de confianza",
+          "request": {
+            "description": "Simula una llamada desde una de mis webs: el Origin pertenece a ALLOWED_HOSTS, así que no hace falta contraseña. (Con curl esto se falsifica — es una barrera blanda a sabiendas.)",
+            "method": "POST",
+            "url": "{{baseUrl}}/api/shorten",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "https://astroleap.enri.me" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://astroleap.enri.me/?duelo=DESDE_EL_JUEGO\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('crea el enlace sin credenciales', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin contraseña ni Origin → 401",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/shorten",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://astroleap.enri.me/x\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('rechaza sin credenciales', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dominio fuera de la lista blanca → 403",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/shorten",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminPassword}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://ejemplo-no-permitido.com/\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('url_not_allowed', () => {",
+                  "    pm.response.to.have.status(403);",
+                  "    pm.expect(pm.response.json().error).to.eql('url_not_allowed');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prefijo inválido → 400",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/shorten",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminPassword}}", "type": "string" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://astroleap.enri.me/x\",\n  \"prefix\": \"Con Mayúsculas!\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('bad_prefix', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().error).to.eql('bad_prefix');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Redirigir",
+      "item": [
+        {
+          "name": "Redirección con prefijo (301)",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "description": "Usa el código guardado por «Acortar con prefijo de proyecto». No sigue la redirección para poder inspeccionar el 301.",
+            "method": "GET",
+            "url": "{{baseUrl}}/{{shortPrefix}}/{{shortCode}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('301 con Location', () => {",
+                  "    pm.response.to.have.status(301);",
+                  "    pm.expect(pm.response.headers.get('Location')).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Código inexistente → 404",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/NOEXIST"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('not_found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Métricas",
+      "item": [
+        {
+          "name": "Baliza de evento (abierta)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/metrics",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"site\": \"astroleap\",\n  \"event\": \"visita\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('contador incrementado', () => pm.expect(pm.response.json().ok).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer métricas de un sitio (privada)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/metrics/astroleap?days=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "metrics", "astroleap"],
+              "query": [{ "key": "days", "value": "30" }]
+            },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminPassword}}", "type": "string" }] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('devuelve events y totals', () => {",
+                  "    const r = pm.response.json();",
+                  "    pm.expect(r).to.have.property('events');",
+                  "    pm.expect(r).to.have.property('totals');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,316 @@
+# Especificación OpenAPI del acortador. Importable en Postman/Insomnia/Bruno
+# (File → Import) o visualizable en https://editor.swagger.io pegando este fichero.
+openapi: 3.0.3
+info:
+  title: Acortador de enlaces (s.enri.me)
+  version: "1.0"
+  description: |
+    Acortador de enlaces personal con lista blanca de dominios de destino, prefijos
+    opcionales por proyecto y métricas agregadas.
+
+    ## Autenticación
+    Si el servidor tiene `ADMIN_PASSWORD` definida, `POST /api/shorten` y la lectura de
+    métricas exigen `Authorization: Bearer <contraseña>`. Excepciones al acortar (pasan
+    **sin** contraseña):
+    - la cabecera `Origin` pertenece a un dominio de `ALLOWED_HOSTS` (mis propias webs;
+      el host de `BASE_URL` queda excluido para que el panel siga pidiéndola), o
+    - el `prefix` pedido está en `PUBLIC_PREFIXES`.
+
+    Ambas son barreras blandas a sabiendas (Origin se falsifica con curl): el abuso real
+    lo cortan la lista blanca de destinos y el límite por IP.
+
+    ## Límites
+    30 acortados/minuto por IP · 120 balizas de métricas/minuto por IP. Al superarlos: `429`.
+  license:
+    name: MIT
+servers:
+  - url: https://s.enri.me
+    description: Producción (Railway)
+  - url: http://localhost:3000
+    description: Desarrollo local
+tags:
+  - name: enlaces
+    description: Crear enlaces cortos y redirigir
+  - name: metricas
+    description: Contadores agregados por sitio/evento/día (sin datos personales)
+  - name: sistema
+
+paths:
+  /api/shorten:
+    post:
+      tags: [enlaces]
+      summary: Acortar una URL
+      description: |
+        Solo URLs hacia dominios de la lista blanca (`ALLOWED_HOSTS`). Deduplica: la misma
+        URL con el mismo prefijo devuelve siempre el mismo código.
+      security:
+        - adminPassword: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 8192
+                  description: URL larga; su dominio debe estar en la lista blanca
+                  example: https://astroleap.enri.me/?duelo=TOKEN_LARGUISIMO
+                prefix:
+                  type: string
+                  pattern: "^[a-z0-9-]{1,32}$"
+                  description: >
+                    Prefijo de proyecto opcional; forma parte del enlace corto
+                    (`/astroleap/Xk3mP2a`). Minúsculas, dígitos y guiones;
+                    `api` y `healthz` están reservados.
+                  example: astroleap
+      responses:
+        "200":
+          description: Enlace creado (o recuperado, si ya existía)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    $ref: "#/components/schemas/Codigo"
+                  prefix:
+                    type: string
+                    description: El prefijo usado, o cadena vacía
+                    example: astroleap
+                  shortUrl:
+                    type: string
+                    format: uri
+                    example: https://s.enri.me/astroleap/Xk3mP2a
+        "400":
+          description: JSON mal formado (`bad_json`) o prefijo inválido (`bad_prefix`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Falta la contraseña o es incorrecta (`unauthorized`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: El dominio de la URL no está en la lista blanca (`url_not_allowed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Límite por IP superado (`rate_limited`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /{code}:
+    get:
+      tags: [enlaces]
+      summary: Redirigir un enlace sin prefijo
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Codigo"
+      responses:
+        "301":
+          description: Redirección a la URL larga (+1 al contador de visitas)
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+            Cache-Control:
+              schema: { type: string, example: "public, max-age=86400" }
+        "404":
+          description: Código inexistente, o el enlace se creó con prefijo (`not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /{prefix}/{code}:
+    get:
+      tags: [enlaces]
+      summary: Redirigir un enlace con prefijo
+      description: El prefijo forma parte de la dirección — debe ser el del enlace.
+      parameters:
+        - name: prefix
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9-]{1,32}$"
+            example: astroleap
+        - name: code
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Codigo"
+      responses:
+        "301":
+          description: Redirección a la URL larga (+1 al contador de visitas)
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "404":
+          description: Código inexistente o prefijo que no coincide (`not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/metrics:
+    post:
+      tags: [metricas]
+      summary: Registrar una baliza de evento
+      description: |
+        Escritura abierta (las balizas salen del navegador del jugador con
+        `navigator.sendBeacon`, sin credenciales). Solo se guarda
+        `(sitio, evento, día, total)` — nada personal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [site, event]
+              properties:
+                site:
+                  $ref: "#/components/schemas/NombreMetrica"
+                event:
+                  allOf: [{ $ref: "#/components/schemas/NombreMetrica" }]
+                  example: visita
+      responses:
+        "200":
+          description: Contador incrementado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+        "400":
+          description: Nombre inválido (`bad_metric`) o JSON mal formado (`bad_json`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Límite por IP superado (`rate_limited`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/metrics/{site}:
+    get:
+      tags: [metricas]
+      summary: Leer las métricas de un sitio
+      security:
+        - adminPassword: []
+      parameters:
+        - name: site
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/NombreMetrica"
+        - name: days
+          in: query
+          description: Días hacia atrás (1–365)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+      responses:
+        "200":
+          description: Filas por día y totales del periodo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  site: { type: string, example: astroleap }
+                  days: { type: integer, example: 30 }
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event: { type: string, example: visita }
+                        day: { type: string, format: date, example: "2026-08-27" }
+                        count: { type: integer, example: 42 }
+                  totals:
+                    type: object
+                    additionalProperties: { type: integer }
+                    example: { visita: 410, victoria: 7 }
+        "401":
+          description: Falta la contraseña o es incorrecta (`unauthorized`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /healthz:
+    get:
+      tags: [sistema]
+      summary: Healthcheck del despliegue
+      responses:
+        "200":
+          description: El servicio está vivo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+
+  /:
+    get:
+      tags: [sistema]
+      summary: Panel web para crear enlaces
+      responses:
+        "200":
+          description: HTML del panel (pide contraseña si el servidor la exige)
+          content:
+            text/html: {}
+
+components:
+  securitySchemes:
+    adminPassword:
+      type: http
+      scheme: bearer
+      description: El valor de `ADMIN_PASSWORD` del servidor
+  schemas:
+    Codigo:
+      type: string
+      pattern: "^[A-HJ-NP-Za-km-z2-9]{7}$"
+      description: 7 caracteres sin 0/O/1/l/I (se dictan por voz sin ambigüedad)
+      example: Xk3mP2a
+    NombreMetrica:
+      type: string
+      pattern: "^[a-z0-9_-]{1,32}$"
+      example: astroleap
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          enum:
+            - bad_json
+            - bad_prefix
+            - unauthorized
+            - url_not_allowed
+            - rate_limited
+            - not_found
+            - bad_metric
+            - code_collision
+            - internal
