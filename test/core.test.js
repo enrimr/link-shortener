@@ -89,6 +89,7 @@ test('los prefijos válidos pasan y los reservados o con mayúsculas no', () => 
     assert.ok(!isValidPrefix('api'));        // reservado: ruta del servidor
     assert.ok(!isValidPrefix('healthz'));    // reservado: ruta del servidor
     assert.ok(!isValidPrefix('docs'));       // reservado: documentación de la API
+    assert.ok(!isValidPrefix('mcp'));        // reservado: endpoint MCP remoto
     assert.ok(!isValidPrefix('AstroLeap')); // solo minúsculas
     assert.ok(!isValidPrefix('con/barra'));
     assert.ok(!isValidPrefix('a'.repeat(33)));

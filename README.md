@@ -57,7 +57,7 @@ curl -I https://s.enri.me/astroleap/Xk3mP2a   # → 301 Location: https://astrol
 
 ## Herramientas MCP para agentes
 
-En [`mcp/`](mcp/) hay un servidor MCP (stdio) que expone el acortador como herramientas para agentes — Claude Code, o cualquier cliente MCP:
+El acortador se puede usar como herramientas MCP de dos formas — remota (sin instalar nada) o local (stdio):
 
 | Herramienta | Qué hace |
 |---|---|
@@ -66,13 +66,25 @@ En [`mcp/`](mcp/) hay un servidor MCP (stdio) que expone el acortador como herra
 | `registrar_evento` | Suma una baliza `{site, event}` |
 | `estado_acortador` | Healthcheck + base URL configurada |
 
-Es un cliente fino de la API HTTP: toda la lógica y la seguridad siguen en el servidor. Configuración por entorno: `SHORTENER_BASE_URL` (por defecto `https://s.enri.me`) y `SHORTENER_ADMIN_PASSWORD`.
+**Remoto (Streamable HTTP)** — el propio servicio expone `POST /mcp`, protegido con `ADMIN_PASSWORD` (todo el endpoint: acortar vía MCP es privilegiado y aquí no hay `Origin` de navegador que valga). Sin estado a propósito: cada petición es independiente. Para Cline, Claude Code o cualquier cliente MCP con soporte HTTP:
 
-En este repo ya está registrado vía [`.mcp.json`](.mcp.json) — Claude Code lo detecta al abrir el proyecto; solo hace falta exportar la contraseña en el shell (`export SHORTENER_ADMIN_PASSWORD=…`) y `cd mcp && npm install` la primera vez. Para usarlo desde cualquier otro sitio:
-
-```bash
-claude mcp add acortador -e SHORTENER_ADMIN_PASSWORD=… -- node /ruta/a/link-shortener/mcp/server.js
+```json
+{
+  "mcpServers": {
+    "acortador": {
+      "type": "streamableHttp",
+      "url": "https://s.enri.me/mcp",
+      "headers": { "Authorization": "Bearer <contraseña>" }
+    }
+  }
+}
 ```
+
+(En Claude Code: `claude mcp add --transport http acortador https://s.enri.me/mcp --header "Authorization: Bearer <contraseña>"`.)
+
+**Local (stdio)** — [`mcp/server.js`](mcp/server.js), un cliente fino de la API HTTP. En este repo ya está registrado vía [`.mcp.json`](.mcp.json) — Claude Code lo detecta al abrir el proyecto; solo hace falta exportar la contraseña (`export SHORTENER_ADMIN_PASSWORD=…`) y `cd mcp && npm install` la primera vez.
+
+En ambos casos, toda la lógica y la seguridad (lista blanca, límites) siguen en el servidor.
 
 ## Métricas de uso (opcional)
 
@@ -128,4 +140,4 @@ ADMIN_PASSWORD='secreta123' \
 npm start       # panel en http://localhost:3000
 ```
 
-La lógica vive en `src/core.js` (pura, testeada con una BD en memoria), Postgres en `src/db.js`, el HTTP en `src/server.js` y el panel en `src/public/index.html` — cero frameworks, una dependencia (`pg`).
+La lógica vive en `src/core.js` (pura, testeada con una BD en memoria), Postgres en `src/db.js`, el HTTP en `src/server.js`, el endpoint MCP en `src/mcp.js` y el panel en `src/public/index.html` — cero frameworks; dependencias: `pg` y el SDK oficial de MCP (`@modelcontextprotocol/sdk` + `zod`).

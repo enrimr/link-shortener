@@ -19,7 +19,7 @@ export function isValidCode(code) {
 
 // Prefijo opcional de proyecto para el enlace corto (p.ej. "astroleap" → s.enri.me/astroleap/Xk3mP2a).
 // Minúsculas, dígitos y guiones; se reservan los nombres que ya son rutas del servidor.
-const RESERVED_PREFIXES = new Set(['api', 'healthz', 'docs']);
+const RESERVED_PREFIXES = new Set(['api', 'healthz', 'docs', 'mcp']);
 export function isValidPrefix(prefix) {
     return typeof prefix === 'string' && /^[a-z0-9-]{1,32}$/.test(prefix) && !RESERVED_PREFIXES.has(prefix);
 }

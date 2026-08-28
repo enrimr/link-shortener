@@ -5,6 +5,7 @@
 //   GET  /:code                        → 301 a la URL larga (+1 al contador de visitas)
 //   GET  /:prefix/:code                → ídem, para enlaces creados con prefijo
 //   GET  /docs                         → documentación interactiva (Scalar sobre docs/openapi.yaml)
+//   POST /mcp                          → MCP remoto (Streamable HTTP; exige ADMIN_PASSWORD)
 //   GET  /healthz                      → ok
 //
 // Variables de entorno (en Railway: las dos primeras las inyecta el enlace con Postgres):
@@ -29,6 +30,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createDb } from './db.js';
+import { createMcpHandler } from './mcp.js';
 import { shorten, resolve, parseAllowedHosts, isTrustedOrigin, makeRateLimiter, passwordMatches, recordMetric, recordOpen, summarizeMetrics, isValidMetricName } from './core.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -57,6 +59,7 @@ if (!ALLOWED_HOSTS.length) {
 }
 
 const db = await createDb(process.env.DATABASE_URL);
+const handleMcp = createMcpHandler({ db, allowedHosts: ALLOWED_HOSTS, baseUrl: BASE_URL });
 const allowShorten = makeRateLimiter({ max: 30, windowMs: 60000 });
 const allowMetrics = makeRateLimiter({ max: 120, windowMs: 60000 }); // las balizas del juego son frecuentes
 
@@ -108,6 +111,22 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET' && url.pathname === '/docs/openapi.yaml') {
             res.writeHead(200, { 'Content-Type': 'application/yaml; charset=utf-8' });
             return res.end(OPENAPI_YAML);
+        }
+
+        // MCP remoto: todo el endpoint exige la contraseña (acortar vía MCP es privilegiado,
+        // y no hay Origin de navegador que valga aquí). Sin estado: solo POST.
+        if (url.pathname === '/mcp') {
+            if (ADMIN_PASSWORD) {
+                const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+                if (!passwordMatches(given, ADMIN_PASSWORD)) return json(res, 401, { error: 'unauthorized' });
+            }
+            if (req.method !== 'POST') {
+                res.writeHead(405, { 'Allow': 'POST', 'Content-Type': 'application/json' });
+                return res.end('{"error":"method_not_allowed"}');
+            }
+            let payload;
+            try { payload = JSON.parse(await readBody(req, 65536)); } catch (e) { return json(res, 400, { error: 'bad_json' }); }
+            return handleMcp(req, res, payload);
         }
 
         if (req.method === 'POST' && url.pathname === '/api/shorten') {
